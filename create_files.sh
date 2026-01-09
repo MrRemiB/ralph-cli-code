@@ -3,7 +3,7 @@
 # Quick script to create all Ralph files in your GitHub repo
 set -e
 
-echo "🚀 Creating Ralph for Claude Code repository structure..."
+echo "🚀 Creating Ralph for CLI Code repository structure..."
 
 # Create directories
 mkdir -p {logs,docs/generated,specs/stdlib,src,examples,templates/specs}
@@ -12,8 +12,8 @@ mkdir -p {logs,docs/generated,specs/stdlib,src,examples,templates/specs}
 cat > ralph_loop.sh << 'EOF'
 #!/bin/bash
 
-# Claude Code Ralph Loop with Rate Limiting and Documentation
-# Adaptation of the Ralph technique for Claude Code with usage management
+# CLI Code Ralph Loop with Rate Limiting and Documentation
+# Adaptation of the Ralph technique for CLI Code with usage management
 
 set -e  # Exit on any error
 
@@ -22,7 +22,29 @@ PROMPT_FILE="PROMPT.md"
 LOG_DIR="logs"
 DOCS_DIR="docs/generated"
 STATUS_FILE="status.json"
-CLAUDE_CODE_CMD="npx @anthropic/claude-code"
+
+# Read the selected CLI tool from config
+RALPH_HOME="${RALPH_HOME:-$HOME/.ralph}"
+CLI_CONFIG="$RALPH_HOME/cli_config"
+if [ -f "$CLI_CONFIG" ]; then
+    CLI_TOOL=$(cat "$CLI_CONFIG")
+else
+    CLI_TOOL="claude"  # Default fallback
+fi
+
+# Map CLI tool to command
+case "$CLI_TOOL" in
+    "copilot")
+        CLI_CODE_CMD="copilot"
+        ;;
+    "claude")
+        CLI_CODE_CMD="claude"
+        ;;
+    *)
+        CLI_CODE_CMD="claude"
+        ;;
+esac
+
 MAX_CALLS_PER_HOUR=100  # Adjust based on your plan
 SLEEP_DURATION=3600     # 1 hour in seconds
 CALL_COUNT_FILE=".call_count"
@@ -216,17 +238,17 @@ should_exit_gracefully() {
 }
 
 # Main execution function
-execute_claude_code() {
+execute_cli_code() {
     local calls_made=$(increment_call_counter)
     local timestamp=$(date '+%Y-%m-%d_%H-%M-%S')
-    local output_file="$LOG_DIR/claude_output_${timestamp}.log"
+    local output_file="$LOG_DIR/cli_code_output_${timestamp}.log"
     local loop_count=$1
     
-    log_status "LOOP" "Executing Claude Code (Call $calls_made/$MAX_CALLS_PER_HOUR)"
+    log_status "LOOP" "Executing CLI Code (Call $calls_made/$MAX_CALLS_PER_HOUR)"
     
-    # Execute Claude Code with the prompt
-    if $CLAUDE_CODE_CMD < "$PROMPT_FILE" > "$output_file" 2>&1; then
-        log_status "SUCCESS" "Claude Code execution completed successfully"
+    # Execute CLI Code with the prompt
+    if $CLI_CODE_CMD < "$PROMPT_FILE" > "$output_file" 2>&1; then
+        log_status "SUCCESS" "CLI Code execution completed successfully"
         
         # Extract key information from output if possible
         if grep -q "error\|Error\|ERROR" "$output_file"; then
@@ -235,7 +257,7 @@ execute_claude_code() {
         
         return 0
     else
-        log_status "ERROR" "Claude Code execution failed, check: $output_file"
+        log_status "ERROR" "CLI Code execution failed, check: $output_file"
         return 1
     fi
 }
@@ -254,7 +276,7 @@ trap cleanup SIGINT SIGTERM
 main() {
     local loop_count=0
     
-    log_status "SUCCESS" "🚀 Ralph loop starting with Claude Code"
+    log_status "SUCCESS" "🚀 Ralph loop starting with CLI Code"
     log_status "INFO" "Max calls per hour: $MAX_CALLS_PER_HOUR"
     log_status "INFO" "Logs: $LOG_DIR/ | Docs: $DOCS_DIR/ | Status: $STATUS_FILE"
     
@@ -294,8 +316,8 @@ main() {
         local calls_made=$(cat "$CALL_COUNT_FILE" 2>/dev/null || echo "0")
         update_status "$loop_count" "$calls_made" "executing" "running"
         
-        # Execute Claude Code
-        if execute_claude_code "$loop_count"; then
+        # Execute CLI Code
+        if execute_cli_code "$loop_count"; then
             update_status "$loop_count" "$(cat "$CALL_COUNT_FILE")" "completed" "success"
             
             # Brief pause between successful executions
@@ -313,7 +335,7 @@ main() {
 # Help function
 show_help() {
     cat << HELPEOF
-Ralph Loop for Claude Code
+Ralph Loop for CLI Code
 
 Usage: $0 [OPTIONS]
 
@@ -711,6 +733,6 @@ echo "└── .gitignore           # Git ignore rules"
 echo ""
 echo "🚀 Next steps:"
 echo "1. git add ."
-echo "2. git commit -m 'Add Ralph for Claude Code implementation'"
+echo "2. git commit -m 'Add Ralph for CLI Code implementation'"
 echo "3. git push origin main"
 echo "4. ./setup.sh my-first-project"

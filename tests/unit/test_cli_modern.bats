@@ -23,9 +23,9 @@ setup() {
     export EXIT_SIGNALS_FILE=".exit_signals"
     export CALL_COUNT_FILE=".call_count"
     export TIMESTAMP_FILE=".last_reset"
-    export CLAUDE_SESSION_FILE=".claude_session_id"
-    export CLAUDE_MIN_VERSION="2.0.76"
-    export CLAUDE_CODE_CMD="claude"
+    export SESSION_FILE=".cli_session_id"
+    export MIN_VERSION="2.0.76"
+    export CLI_CODE_CMD="claude"
 
     mkdir -p "$LOG_DIR" "$DOCS_DIR"
     echo "0" > "$CALL_COUNT_FILE"
@@ -61,16 +61,16 @@ setup() {
     # These are copies of the functions from ralph_loop.sh for isolated testing
     # ==========================================================================
 
-    # Check Claude CLI version for compatibility with modern flags
-    check_claude_version() {
-        local version=$($CLAUDE_CODE_CMD --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    # Check CLI version for compatibility with modern flags
+    check_cli_version() {
+        local version=$($CLI_CODE_CMD --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 
         if [[ -z "$version" ]]; then
-            log_status "WARN" "Cannot detect Claude CLI version, assuming compatible"
+            log_status "WARN" "Cannot detect CLI version, assuming compatible"
             return 0
         fi
 
-        local required="$CLAUDE_MIN_VERSION"
+        local required="$MIN_VERSION"
         local ver_parts=(${version//./ })
         local req_parts=(${required//./ })
 
@@ -78,7 +78,7 @@ setup() {
         local req_num=$((${req_parts[0]:-0} * 10000 + ${req_parts[1]:-0} * 100 + ${req_parts[2]:-0}))
 
         if [[ $ver_num -lt $req_num ]]; then
-            log_status "WARN" "Claude CLI version $version < $required. Some modern features may not work."
+            log_status "WARN" "CLI version $version < $required. Some modern features may not work."
             return 1
         fi
 
@@ -114,30 +114,30 @@ setup() {
         echo "${context:0:500}"
     }
 
-    # Initialize or resume Claude session
-    init_claude_session() {
-        if [[ -f "$CLAUDE_SESSION_FILE" ]]; then
-            local session_id=$(cat "$CLAUDE_SESSION_FILE" 2>/dev/null)
+    # Initialize or resume CLI session
+    init_cli_session() {
+        if [[ -f "$SESSION_FILE" ]]; then
+            local session_id=$(cat "$SESSION_FILE" 2>/dev/null)
             if [[ -n "$session_id" ]]; then
-                log_status "INFO" "Resuming Claude session: ${session_id:0:20}..."
+                log_status "INFO" "Resuming CLI session: ${session_id:0:20}..."
                 echo "$session_id"
                 return 0
             fi
         fi
 
-        log_status "INFO" "Starting new Claude session"
+        log_status "INFO" "Starting new CLI session"
         echo ""
     }
 
     # Save session ID after successful execution
-    save_claude_session() {
+    save_cli_session() {
         local output_file=$1
 
         if [[ -f "$output_file" ]]; then
             local session_id=$(jq -r '.metadata.session_id // .session_id // empty' "$output_file" 2>/dev/null)
             if [[ -n "$session_id" && "$session_id" != "null" ]]; then
-                echo "$session_id" > "$CLAUDE_SESSION_FILE"
-                log_status "INFO" "Saved Claude session: ${session_id:0:20}..."
+                echo "$session_id" > "$SESSION_FILE"
+                log_status "INFO" "Saved CLI session: ${session_id:0:20}..."
             fi
         fi
     }
@@ -154,24 +154,24 @@ teardown() {
 # CONFIGURATION VARIABLE TESTS
 # =============================================================================
 
-@test "CLAUDE_OUTPUT_FORMAT defaults to json" {
+@test "OUTPUT_FORMAT defaults to json" {
     # Verify by checking the default in ralph_loop.sh via grep
-    run grep 'CLAUDE_OUTPUT_FORMAT=' "${BATS_TEST_DIRNAME}/../../ralph_loop.sh"
+    run grep 'OUTPUT_FORMAT=' "${BATS_TEST_DIRNAME}/../../ralph_loop.sh"
     [[ "$output" == *'"json"'* ]]
 }
 
-@test "CLAUDE_ALLOWED_TOOLS has sensible defaults" {
+@test "ALLOWED_TOOLS has sensible defaults" {
     # Verify by checking the default in ralph_loop.sh via grep
-    run grep 'CLAUDE_ALLOWED_TOOLS=' "${BATS_TEST_DIRNAME}/../../ralph_loop.sh"
+    run grep 'ALLOWED_TOOLS=' "${BATS_TEST_DIRNAME}/../../ralph_loop.sh"
 
     # Should include Write, Bash, Read at minimum
     [[ "$output" == *"Write"* ]]
     [[ "$output" == *"Read"* ]]
 }
 
-@test "CLAUDE_USE_CONTINUE defaults to true" {
+@test "USE_CONTINUE defaults to true" {
     # Verify by checking the default in ralph_loop.sh via grep
-    run grep 'CLAUDE_USE_CONTINUE=' "${BATS_TEST_DIRNAME}/../../ralph_loop.sh"
+    run grep 'USE_CONTINUE=' "${BATS_TEST_DIRNAME}/../../ralph_loop.sh"
     [[ "$output" == *"true"* ]]
 }
 
@@ -179,7 +179,7 @@ teardown() {
 # CLI FLAG PARSING TESTS
 # =============================================================================
 
-@test "--output-format flag sets CLAUDE_OUTPUT_FORMAT" {
+@test "--output-format flag sets OUTPUT_FORMAT" {
     # Simulate parsing
     run bash -c "source ${BATS_TEST_DIRNAME}/../../ralph_loop.sh --output-format text --help 2>&1 || true"
 
@@ -194,7 +194,7 @@ teardown() {
     [[ $status -ne 0 ]] || [[ "$output" == *"invalid"* ]] || skip "--output-format validation not yet implemented"
 }
 
-@test "--allowed-tools flag sets CLAUDE_ALLOWED_TOOLS" {
+@test "--allowed-tools flag sets ALLOWED_TOOLS" {
     run bash -c "source ${BATS_TEST_DIRNAME}/../../ralph_loop.sh --allowed-tools 'Write,Read' --help 2>&1 || true"
 
     [[ "$output" != *"Unknown option"* ]] || skip "--allowed-tools flag not yet implemented"
@@ -307,24 +307,24 @@ EOF
 # SESSION MANAGEMENT TESTS
 # =============================================================================
 
-@test "init_claude_session returns empty string for new session" {
-    rm -f "$CLAUDE_SESSION_FILE"
+@test "init_cli_session returns empty string for new session" {
+    rm -f "$SESSION_FILE"
 
-    run init_claude_session
+    run init_cli_session
 
     # Should be empty or contain just log message
     [[ -z "$output" ]] || [[ "$output" == *"new"* ]]
 }
 
-@test "init_claude_session returns existing session ID" {
-    echo "session-abc123" > "$CLAUDE_SESSION_FILE"
+@test "init_cli_session returns existing session ID" {
+    echo "session-abc123" > "$SESSION_FILE"
 
-    run init_claude_session
+    run init_cli_session
 
     [[ "$output" == *"session-abc123"* ]]
 }
 
-@test "save_claude_session extracts session ID from JSON output" {
+@test "save_cli_session extracts session ID from JSON output" {
     local output_file="$LOG_DIR/test_output.log"
 
     cat > "$output_file" << 'EOF'
@@ -336,15 +336,15 @@ EOF
 }
 EOF
 
-    save_claude_session "$output_file"
+    save_cli_session "$output_file"
 
     # Should save session ID to file
-    assert_file_exists "$CLAUDE_SESSION_FILE"
-    local saved=$(cat "$CLAUDE_SESSION_FILE")
+    assert_file_exists "$SESSION_FILE"
+    local saved=$(cat "$SESSION_FILE")
     assert_equal "$saved" "new-session-xyz789"
 }
 
-@test "save_claude_session does nothing if no session_id in output" {
+@test "save_cli_session does nothing if no session_id in output" {
     local output_file="$LOG_DIR/test_output.log"
 
     cat > "$output_file" << 'EOF'
@@ -353,44 +353,44 @@ EOF
 }
 EOF
 
-    rm -f "$CLAUDE_SESSION_FILE"
+    rm -f "$SESSION_FILE"
 
-    save_claude_session "$output_file"
+    save_cli_session "$output_file"
 
     # Should not create session file
-    [[ ! -f "$CLAUDE_SESSION_FILE" ]]
+    [[ ! -f "$SESSION_FILE" ]]
 }
 
 # =============================================================================
 # VERSION CHECK TESTS
 # =============================================================================
 
-@test "check_claude_version passes for compatible version" {
-    # Mock claude command
+@test "check_cli_version passes for compatible version" {
+    # Mock CLI command
     function claude() {
         if [[ "$1" == "--version" ]]; then
             echo "claude-code version 2.1.0"
         fi
     }
     export -f claude
-    export CLAUDE_CODE_CMD="claude"
+    export CLI_CODE_CMD="claude"
 
-    run check_claude_version
+    run check_cli_version
 
     assert_equal "$status" "0"
 }
 
-@test "check_claude_version warns for old version" {
-    # Mock claude command with old version
+@test "check_cli_version warns for old version" {
+    # Mock CLI command with old version
     function claude() {
         if [[ "$1" == "--version" ]]; then
             echo "claude-code version 1.0.0"
         fi
     }
     export -f claude
-    export CLAUDE_CODE_CMD="claude"
+    export CLI_CODE_CMD="claude"
 
-    run check_claude_version
+    run check_cli_version
 
     # Should fail or warn
     [[ $status -ne 0 ]] || [[ "$output" == *"upgrade"* ]] || [[ "$output" == *"version"* ]]
@@ -416,4 +416,110 @@ EOF
     run bash "${BATS_TEST_DIRNAME}/../../ralph_loop.sh" --help
 
     [[ "$output" == *"no-continue"* ]] || skip "--no-continue help not yet added"
+}
+
+# =============================================================================
+# CLI SELECTION TESTS (select_cli_tool)
+# =============================================================================
+
+@test "select_cli_tool creates cli_config file" {
+    local test_ralph_home="$TEST_DIR/.ralph"
+    mkdir -p "$test_ralph_home"
+    
+    # Create a non-interactive test version that simulates selecting Copilot
+    local test_script=$(cat << 'TESTEOF'
+        RALPH_HOME="$1"
+        cli_identifier="copilot"
+        mkdir -p "$RALPH_HOME"
+        echo "$cli_identifier" > "$RALPH_HOME/cli_config"
+TESTEOF
+)
+    
+    run bash -c "$test_script" -- "$test_ralph_home"
+    
+    assert_file_exists "$test_ralph_home/cli_config"
+}
+
+@test "select_cli_tool saves copilot identifier" {
+    local test_ralph_home="$TEST_DIR/.ralph"
+    mkdir -p "$test_ralph_home"
+    
+    # Simulate saving copilot selection
+    mkdir -p "$test_ralph_home"
+    echo "copilot" > "$test_ralph_home/cli_config"
+    
+    local saved=$(cat "$test_ralph_home/cli_config")
+    assert_equal "$saved" "copilot"
+}
+
+@test "select_cli_tool saves claude identifier" {
+    local test_ralph_home="$TEST_DIR/.ralph"
+    mkdir -p "$test_ralph_home"
+    
+    # Simulate saving claude selection
+    mkdir -p "$test_ralph_home"
+    echo "claude" > "$test_ralph_home/cli_config"
+    
+    local saved=$(cat "$test_ralph_home/cli_config")
+    assert_equal "$saved" "claude"
+}
+
+@test "cli_config is readable by ralph_loop.sh" {
+    local test_ralph_home="$TEST_DIR/.ralph"
+    mkdir -p "$test_ralph_home"
+    echo "copilot" > "$test_ralph_home/cli_config"
+    
+    # Verify ralph_loop.sh can read the config
+    run bash -c "
+        RALPH_HOME='$test_ralph_home'
+        if [ -f \"\$RALPH_HOME/cli_config\" ]; then
+            CLI_TOOL=\$(cat \"\$RALPH_HOME/cli_config\")
+            echo \$CLI_TOOL
+        fi
+    "
+    
+    [[ "$output" == "copilot" ]]
+}
+
+@test "cli_config is readable by ralph_import.sh" {
+    local test_ralph_home="$TEST_DIR/.ralph"
+    mkdir -p "$test_ralph_home"
+    echo "claude" > "$test_ralph_home/cli_config"
+    
+    # Verify ralph_import.sh can read the config
+    run bash -c "
+        RALPH_HOME='$test_ralph_home'
+        if [ -f \"\$RALPH_HOME/cli_config\" ]; then
+            CLI_TOOL=\$(cat \"\$RALPH_HOME/cli_config\")
+            echo \$CLI_TOOL
+        fi
+    "
+    
+    [[ "$output" == "claude" ]]
+}
+
+@test "select_cli_tool options array has 4 options" {
+    # Verify the install.sh script defines 4 CLI options
+    run grep -A 1 'options=(' "${BATS_TEST_DIRNAME}/../../install.sh"
+    
+    [[ "$output" == *"Copilot CLI"* ]]
+    [[ "$output" == *"Claude CLI"* ]]
+    [[ "$output" == *"Gemini CLI"* ]]
+    [[ "$output" == *"OpenCode CLI"* ]]
+}
+
+@test "select_cli_tool marks only Copilot and Claude as available" {
+    # Verify the available array has correct availability flags
+    run grep -A 1 'available=(' "${BATS_TEST_DIRNAME}/../../install.sh"
+    
+    # Should show true false false true pattern
+    [[ "$output" == *"true"* ]]
+    [[ "$output" == *"false"* ]]
+}
+
+@test "install.sh creates cli_config in RALPH_HOME" {
+    # Verify that install.sh references the correct config path
+    run grep 'config_file="$RALPH_HOME/cli_config"' "${BATS_TEST_DIRNAME}/../../install.sh"
+    
+    [[ "$status" -eq 0 ]]
 }

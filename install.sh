@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Ralph for Claude Code - Global Installation Script
+# Ralph for any CLI - Global Installation Script
 set -e
 
 # Configuration
@@ -30,6 +30,111 @@ log() {
     echo -e "${color}[$(date '+%H:%M:%S')] [$level] $message${NC}"
 }
 
+# Select CLI tool with interactive menu
+select_cli_tool() {
+    log "INFO" "Selecting CLI tool for Ralph..."
+    
+    local options=("Copilot CLI" "Gemini CLI" "OpenCode CLI" "Claude CLI")
+    local available=(true false false true)  # Only Copilot and Claude available
+    local selected=0
+    local choice=""
+    
+    # Save selection to config
+    local config_file="$RALPH_HOME/cli_config"
+    
+    while true; do
+        clear
+        echo "╔════════════════════════════════════════════════════════════╗"
+        echo "║     Ralph - Select Your CLI Tool                           ║"
+        echo "╚════════════════════════════════════════════════════════════╝"
+        echo ""
+        
+        for i in "${!options[@]}"; do
+            local option="${options[$i]}"
+            local is_available="${available[$i]}"
+            local prefix="  "
+            local status=""
+            
+            # Highlight selected option
+            if [ $i -eq $selected ]; then
+                prefix="▶ "
+            fi
+            
+            # Mark unavailable options
+            if [ "$is_available" = false ]; then
+                status=" [Coming Soon]"
+                echo -e "${YELLOW}${prefix}${option}${status}${NC}"
+            else
+                echo -e "${GREEN}${prefix}${option}${NC}"
+            fi
+        done
+        
+        echo ""
+        echo "Use ↑↓ arrows to navigate, Enter to select"
+        echo ""
+        
+        # Read single key input
+        read -rsn1 key
+        
+        case "$key" in
+            $'\x1b')  # Escape sequence
+                read -rsn2 key  # Read the rest of the sequence
+                case "$key" in
+                    '[A')  # Up arrow
+                        selected=$((selected - 1))
+                        if [ $selected -lt 0 ]; then
+                            selected=$((${#options[@]} - 1))
+                        fi
+                        ;;
+                    '[B')  # Down arrow
+                        selected=$((selected + 1))
+                        if [ $selected -ge ${#options[@]} ]; then
+                            selected=0
+                        fi
+                        ;;
+                esac
+                ;;
+            '')  # Enter key
+                # Check if selected option is available
+                if [ "${available[$selected]}" = true ]; then
+                    choice="${options[$selected]}"
+                    break
+                else
+                    # Show unavailable message
+                    clear
+                    echo ""
+                    echo -e "${RED}❌ ${options[$selected]} is not yet available${NC}"
+                    echo "Please select Copilot CLI or Claude CLI"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+        esac
+    done
+    
+    clear
+    
+    # Convert choice to identifier
+    local cli_identifier=""
+    case "$choice" in
+        "Copilot CLI")
+            cli_identifier="copilot"
+            ;;
+        "Claude CLI")
+            cli_identifier="claude"
+            ;;
+    esac
+    
+    # Save to config
+    mkdir -p "$RALPH_HOME"
+    echo "$cli_identifier" > "$config_file"
+    
+    log "SUCCESS" "Selected CLI: $choice"
+    echo ""
+    
+    return 0
+}
+
 # Check dependencies
 check_dependencies() {
     log "INFO" "Checking dependencies..."
@@ -56,9 +161,6 @@ check_dependencies() {
         echo "  CentOS/RHEL: sudo yum install nodejs npm jq git"
         exit 1
     fi
-    
-    # Claude Code CLI will be downloaded automatically when first used
-    log "INFO" "Claude Code CLI (@anthropic-ai/claude-code) will be downloaded when first used."
     
     # Check tmux (optional)
     if ! command -v tmux &> /dev/null; then
@@ -93,7 +195,7 @@ install_scripts() {
     # Create the main ralph command
     cat > "$INSTALL_DIR/ralph" << 'EOF'
 #!/bin/bash
-# Ralph for Claude Code - Main Command
+# Ralph for any CLI - Main Command
 
 RALPH_HOME="$HOME/.ralph"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -233,9 +335,10 @@ check_path() {
 
 # Main installation
 main() {
-    echo "🚀 Installing Ralph for Claude Code globally..."
+    echo "🚀 Installing Ralph globally..."
     echo ""
     
+    select_cli_tool
     check_dependencies
     create_install_dirs
     install_scripts
@@ -244,7 +347,7 @@ main() {
     check_path
     
     echo ""
-    log "SUCCESS" "🎉 Ralph for Claude Code installed successfully!"
+    log "SUCCESS" "🎉 Ralph installed successfully!"
     echo ""
     echo "Global commands available:"
     echo "  ralph --monitor          # Start Ralph with integrated monitoring"
@@ -271,13 +374,13 @@ case "${1:-install}" in
         main
         ;;
     uninstall)
-        log "INFO" "Uninstalling Ralph for Claude Code..."
+        log "INFO" "Uninstalling Ralph for any CLI..."
         rm -f "$INSTALL_DIR/ralph" "$INSTALL_DIR/ralph-monitor" "$INSTALL_DIR/ralph-setup" "$INSTALL_DIR/ralph-import"
         rm -rf "$RALPH_HOME"
-        log "SUCCESS" "Ralph for Claude Code uninstalled"
+        log "SUCCESS" "Ralph for any CLI uninstalled"
         ;;
     --help|-h)
-        echo "Ralph for Claude Code Installation"
+        echo "Ralph for any CLI Installation"
         echo ""
         echo "Usage: $0 [install|uninstall]"
         echo ""

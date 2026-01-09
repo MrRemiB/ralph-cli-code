@@ -1,6 +1,6 @@
 #!/bin/bash
 # Response Analyzer Component for Ralph
-# Analyzes Claude Code output to detect completion signals, test-only loops, and progress
+# Analyzes CLI tool output to detect completion signals, test-only loops, and progress
 
 # Source date utilities for cross-platform compatibility
 source "$(dirname "${BASH_SOURCE[0]}")/date_utils.sh"
@@ -145,7 +145,7 @@ parse_json_response() {
     return 0
 }
 
-# Analyze Claude Code response and extract signals
+# Analyze CLI tool response and extract signals
 analyze_response() {
     local output_file=$1
     local loop_number=$2

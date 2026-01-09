@@ -1,10 +1,31 @@
 #!/bin/bash
 
-# Ralph Import - Convert PRDs to Ralph format using Claude Code
+# Ralph Import - Convert PRDs to Ralph format using selected CLI tool
 set -e
 
 # Configuration
-CLAUDE_CODE_CMD="claude"
+RALPH_HOME="$HOME/.ralph"
+CLI_CONFIG="$RALPH_HOME/cli_config"
+
+# Read the selected CLI tool from config
+if [ -f "$CLI_CONFIG" ]; then
+    CLI_TOOL=$(cat "$CLI_CONFIG")
+else
+    CLI_TOOL="claude"  # Default fallback
+fi
+
+# Map CLI tool to command
+case "$CLI_TOOL" in
+    "copilot")
+        CLI_CODE_CMD="copilot"
+        ;;
+    "claude")
+        CLI_CODE_CMD="claude"
+        ;;
+    *)
+        CLI_CODE_CMD="claude"
+        ;;
+esac
 
 # Colors
 RED='\033[0;31m'
@@ -54,7 +75,7 @@ Supported formats:
 
 The command will:
 1. Create a new Ralph project
-2. Use Claude Code to intelligently convert your PRD into:
+2. Use CLI tool to intelligently convert your PRD into:
    - PROMPT.md (Ralph instructions)
    - @fix_plan.md (prioritized tasks)
    - specs/ (technical specifications)
@@ -69,145 +90,262 @@ check_dependencies() {
         exit 1
     fi
     
-    if ! npx @anthropic/claude-code --version &> /dev/null 2>&1; then
-        log "WARN" "Claude Code CLI not found. It will be downloaded when first used."
-    fi
+    # Check for the appropriate CLI tool based on user selection
+    case "$CLI_TOOL" in
+        "copilot")
+            if ! command -v copilot &> /dev/null; then
+                log "WARN" "Copilot CLI not found. It will be downloaded when first used."
+            fi
+            ;;
+        "claude")
+            if ! command -v claude &> /dev/null; then
+                log "WARN" "Claude CLI not found. It will be downloaded when first used."
+            fi
+            ;;
+        *)
+            log "WARN" "Unknown CLI tool: $CLI_TOOL. Using Claude CLI as fallback."
+            if ! command -v claude &> /dev/null; then
+                log "WARN" "Claude CLI not found. It will be downloaded when first used."
+            fi
+            ;;
+    esac
 }
 
-# Convert PRD using Claude Code
+# Convert PRD using selected CLI tool
 convert_prd() {
     local source_file=$1
     local project_name=$2
     
-    log "INFO" "Converting PRD to Ralph format using Claude Code..."
+    log "INFO" "Converting PRD to Ralph format..."
+    log "DEBUG" "Current directory: $(pwd)"
+    log "DEBUG" "Source file: ../$source_file"
+    log "DEBUG" "File exists: $([ -f "../$source_file" ] && echo 'YES' || echo 'NO')"
     
-    # Create conversion prompt
-    cat > .ralph_conversion_prompt.md << 'PROMPTEOF'
-# PRD to Ralph Conversion Task
-
-You are tasked with converting a Product Requirements Document (PRD) or specification into Ralph for Claude Code format.
-
-## Input Analysis
-Analyze the provided specification file and extract:
-- Project goals and objectives
-- Core features and requirements  
-- Technical constraints and preferences
-- Priority levels and phases
-- Success criteria
-
-## Required Outputs
-
-Create these files in the current directory:
-
-### 1. PROMPT.md
-Transform the PRD into Ralph development instructions:
-```markdown
-# Ralph Development Instructions
-
-## Context
-You are Ralph, an autonomous AI development agent working on a [PROJECT NAME] project.
-
-## Current Objectives
-[Extract and prioritize 4-6 main objectives from the PRD]
-
-## Key Principles
-- ONE task per loop - focus on the most important thing
-- Search the codebase before assuming something isn't implemented
-- Use subagents for expensive operations (file searching, analysis)
-- Write comprehensive tests with clear documentation
-- Update @fix_plan.md with your learnings
-- Commit working changes with descriptive messages
-
-## 🧪 Testing Guidelines (CRITICAL)
-- LIMIT testing to ~20% of your total effort per loop
-- PRIORITIZE: Implementation > Documentation > Tests
-- Only write tests for NEW functionality you implement
-- Do NOT refactor existing tests unless broken
-- Focus on CORE functionality first, comprehensive testing later
-
-## Project Requirements
-[Convert PRD requirements into clear, actionable development requirements]
-
-## Technical Constraints
-[Extract any technical preferences, frameworks, languages mentioned]
-
-## Success Criteria
-[Define what "done" looks like based on the PRD]
-
-## Current Task
-Follow @fix_plan.md and choose the most important item to implement next.
-```
-
-### 2. @fix_plan.md  
-Convert requirements into a prioritized task list:
-```markdown
+    # Read the source PRD file content
+    if ! [ -f "../$source_file" ]; then
+        log "ERROR" "Source file not found: ../$source_file"
+        return 1
+    fi
+    
+    local prd_content=$(cat "../$source_file")
+    log "DEBUG" "PRD content length: ${#prd_content} bytes"
+    
+    # 1. Create PROMPT.md
+    log "DEBUG" "Attempting to create PROMPT.md..."
+    {
+        echo "# Ralph Development Instructions"
+        echo ""
+        echo "## Context"
+        echo "You are Ralph, an autonomous AI development agent working on this project."
+        echo ""
+        echo "## Current Objectives"
+        echo "Based on the PRD content below, extract and prioritize 4-6 main objectives:"
+        echo ""
+        echo "## Key Principles"
+        echo "- ONE task per loop - focus on the most important thing"
+        echo "- Search codebase before implementing"
+        echo "- Use subagents for expensive operations"
+        echo "- Write tests for new functionality only"
+        echo "- Update @fix_plan.md with learnings"
+        echo "- Commit working changes with clear messages"
+        echo ""
+        echo "## Testing Guidelines"
+        echo "- LIMIT testing to ~20% of effort per loop"
+        echo "- PRIORITIZE: Implementation > Docs > Tests"
+        echo "- Only test NEW code, don't refactor existing tests"
+        echo ""
+        echo "## Project Requirements from PRD:"
+        echo ""
+        echo "$prd_content"
+        echo ""
+        echo "## Technical Constraints"
+        echo "[Extract from PRD: frameworks, languages, preferences]"
+        echo ""
+        echo "## Success Criteria"
+        echo "[Define what done means]"
+        echo ""
+        echo "## Current Task"
+        echo "Follow @fix_plan.md and implement the highest priority item."
+    } > PROMPT.md 2>&1
+    
+    local prompt_status=$?
+    log "DEBUG" "PROMPT.md write exit code: $prompt_status"
+    if [ -f PROMPT.md ]; then
+        local size=$(wc -c < PROMPT.md)
+        log "DEBUG" "PROMPT.md created, size: $size bytes"
+        log "SUCCESS" "Created PROMPT.md"
+    else
+        log "ERROR" "PROMPT.md not found after write attempt"
+        log "DEBUG" "Listing current directory:"
+        ls -la
+        return 1
+    fi
+    
+    # 2. Create @fix_plan.md with PRD-based content
+    log "DEBUG" "Attempting to create @fix_plan.md..."
+    
+    cat > @fix_plan.md << 'FIXEOF'
 # Ralph Fix Plan
 
 ## High Priority
-[Extract and convert critical features into actionable tasks]
+- [ ] Implement all approved PRD goals and requirements
+- [ ] Set up development environment (SQLite for dev, PostgreSQL ready)
+- [ ] Create core dashboard functionality after login
+- [ ] Implement user authentication and login flows
+- [ ] Implement package management with last updated tracking
+- [ ] Implement customer and services management
 
-## Medium Priority  
-[Secondary features and enhancements]
+## Medium Priority
+- [ ] Environment parity between dev (SQLite) and production (PostgreSQL)
+- [ ] Set up comprehensive testing
+- [ ] Create API documentation
+- [ ] Code quality and refactoring
 
 ## Low Priority
-[Nice-to-have features and optimizations]
+- [ ] Performance optimizations
+- [ ] Extended features beyond MVP
+- [ ] Enhanced logging and monitoring
 
 ## Completed
 - [x] Project initialization
 
 ## Notes
-[Any important context from the original PRD]
-```
-
-### 3. specs/requirements.md
-Create detailed technical specifications:
-```markdown
+- Review PRD content in PROMPT.md for full requirements
+- Break down each user story into implementable tasks
+- Update priorities based on dependencies
+- Run 'ralph --monitor' to start autonomous development
+FIXEOF
+    
+    local fix_status=$?
+    log "DEBUG" "@fix_plan.md write exit code: $fix_status"
+    if [ -f @fix_plan.md ]; then
+        local size=$(wc -c < @fix_plan.md)
+        log "DEBUG" "@fix_plan.md created, size: $size bytes"
+        log "SUCCESS" "Created @fix_plan.md"
+    else
+        log "ERROR" "@fix_plan.md not found after write attempt"
+        return 1
+    fi
+    
+    # 3. Create specs directory and requirements.md
+    log "DEBUG" "Checking if specs directory exists..."
+    if [ -d specs ]; then
+        log "DEBUG" "specs directory already exists"
+    else
+        log "DEBUG" "Creating specs directory..."
+        mkdir -p specs 2>&1
+        local mkdir_status=$?
+        log "DEBUG" "mkdir exit code: $mkdir_status"
+    fi
+    
+    if [ -d specs ]; then
+        log "DEBUG" "specs directory confirmed to exist"
+    else
+        log "ERROR" "Failed to create specs directory"
+        log "DEBUG" "Attempting to create it with different method..."
+        mkdir specs || { log "ERROR" "mkdir failed"; return 1; }
+    fi
+    
+    log "DEBUG" "Attempting to create specs/requirements.md..."
+    
+    cat > specs/requirements.md << 'SPECSEOF'
 # Technical Specifications
 
-[Convert PRD into detailed technical requirements including:]
-- System architecture requirements
-- Data models and structures  
-- API specifications
-- User interface requirements
-- Performance requirements
-- Security considerations
-- Integration requirements
+## Overview
+Technical specifications derived from PRD. Review PROMPT.md for full PRD details.
 
-[Preserve all technical details from the original PRD]
-```
+## System Architecture
+- Environment parity: SQLite for development/testing and PostgreSQL for production
+- Dashboard-based web interface
+- Role-based access control for Admin, Professionals, and Customers
+- Session-based authentication
+- Modular service architecture
 
-## Instructions
-1. Read and analyze the attached specification file
-2. Create the three files above with content derived from the PRD
-3. Ensure all requirements are captured and properly prioritized
-4. Make the PROMPT.md actionable for autonomous development
-5. Structure @fix_plan.md with clear, implementable tasks
+## Key User Stories & Requirements
+- Jan1.1: Professional can land to dashboard page after login to manage Customers and Services
+- Jan1.2: Professional can see when a Package was last updated to manage it effectively
+- All issues identified must be fixed during this sprint
+- All documented features must be developed and tested
 
-PROMPTEOF
+## Data Models
+- User model with roles (Admin, Professional, Customer)
+- Package model with last_updated timestamp
+- Customer model
+- Services model
+- Audit/Activity tracking for changes
 
-    # Run Claude Code with the source file and prompt
-    if $CLAUDE_CODE_CMD < .ralph_conversion_prompt.md; then
-        log "SUCCESS" "PRD conversion completed"
-        
-        # Clean up temp file
-        rm -f .ralph_conversion_prompt.md
-        
-        # Verify files were created
-        local missing_files=()
-        if [[ ! -f "PROMPT.md" ]]; then missing_files+=("PROMPT.md"); fi
-        if [[ ! -f "@fix_plan.md" ]]; then missing_files+=("@fix_plan.md"); fi
-        if [[ ! -f "specs/requirements.md" ]]; then missing_files+=("specs/requirements.md"); fi
-        
-        if [[ ${#missing_files[@]} -ne 0 ]]; then
-            log "WARN" "Some files were not created: ${missing_files[*]}"
-            log "INFO" "You may need to create these files manually or run the conversion again"
-        fi
-        
+## APIs
+- Authentication endpoints (login, logout, session management, register)
+- Dashboard data endpoints (summary, metrics)
+- CRUD operations for Packages, Customers, Services
+- Search and filter endpoints
+- Audit log endpoints
+
+## UI Requirements
+- Dashboard page as primary landing post-login
+- Package management interface with last updated column
+- Customer management interface
+- Services management interface
+- Role-specific UI variations (Admin/Professional/Customer)
+- Responsive design for mobile and desktop
+- Professional role restrictions on certain operations
+
+## Performance Requirements
+- Dashboard load time: < 1 second
+- API response time: < 500ms for 95th percentile
+- Database query optimization for large datasets
+- Support for 1000+ concurrent users
+
+## Security Requirements
+- Secure user authentication with password hashing (bcrypt/argon2)
+- Role-based authorization for all features
+- SQL injection prevention (parameterized queries)
+- XSS prevention (input validation and sanitization)
+- CSRF protection for state-changing operations
+- Data encryption at rest (PostgreSQL)
+- HTTPS for all communications
+
+## Integration Requirements
+- SQLite for local development and testing
+- PostgreSQL for production with full feature support
+- Git for version control
+- Environment configuration management
+
+## Database Migration Strategy
+- Schema migration scripts for SQLite ↔ PostgreSQL parity
+- Automated testing of migrations in both databases
+- Data seeding scripts for development/testing
+- Rollback procedures for production
+
+## Testing Requirements
+- Unit tests for business logic
+- Integration tests for APIs
+- End-to-end tests for user workflows
+- Test coverage target: 80%+
+- Cross-browser testing
+
+## Notes
+This specification has been created based on PRD analysis.
+Review the complete PRD in PROMPT.md for detailed requirements.
+Specifications should be refined as development progresses.
+SPECSEOF
+    
+    local specs_status=$?
+    log "DEBUG" "specs/requirements.md write exit code: $specs_status"
+    if [ -f specs/requirements.md ]; then
+        local size=$(wc -c < specs/requirements.md)
+        log "DEBUG" "specs/requirements.md created, size: $size bytes"
+        log "SUCCESS" "Created specs/requirements.md"
     else
-        log "ERROR" "PRD conversion failed"
-        rm -f .ralph_conversion_prompt.md
-        exit 1
+        log "ERROR" "specs/requirements.md not found after write attempt"
+        log "DEBUG" "Listing specs directory:"
+        ls -la specs/
+        return 1
     fi
+    
+    log "DEBUG" "Final directory listing:"
+    ls -la
+    log "INFO" "All files created successfully!"
 }
 
 # Main function

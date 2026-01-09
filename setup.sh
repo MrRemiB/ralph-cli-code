@@ -20,11 +20,8 @@ cp ../templates/fix_plan.md @fix_plan.md
 cp ../templates/AGENT.md @AGENT.md
 cp -r ../templates/specs/* specs/ 2>/dev/null || true
 
-# Initialize git
-git init
+# Create README
 echo "# $PROJECT_NAME" > README.md
-git add .
-git commit -m "Initial Ralph project setup"
 
 echo "✅ Project $PROJECT_NAME created!"
 echo "Next steps:"

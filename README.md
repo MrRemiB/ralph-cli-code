@@ -1,19 +1,21 @@
-# Ralph for Claude Code
+# Ralph for any CLI tool
 
-![Version](https://img.shields.io/badge/version-0.9.1-blue)
+![Version](https://img.shields.io/badge/version-0.0.1-blue)
 ![Status](https://img.shields.io/badge/status-active%20development-yellow)
 ![Tests](https://img.shields.io/badge/tests-145%20passing-green)
 ![Coverage](https://img.shields.io/badge/coverage-informational-lightgrey)
 
 > **Autonomous AI development loop with intelligent exit detection and rate limiting**
 
-Ralph is an implementation of the Geoffrey Huntley's technique for Claude Code that enables continuous autonomous development cycles he named after [Ralph Wiggum](https://ghuntley.com/ralph/). It enables continuous autonomous development cycles where Claude Code iteratively improves your project until completion, with built-in safeguards to prevent infinite loops and API overuse.
+Ralph is an implementation of Geoffrey Huntley's technique that enables continuous autonomous development cycles with any CLI tool, named after [Ralph Wiggum](https://ghuntley.com/ralph/). It enables continuous autonomous development cycles where any CLI tool iteratively improves your project until completion, with built-in safeguards to prevent infinite loops and API overuse.
+
+**Forked from** [https://github.com/frankbria/ralph-claude-code](https://github.com/frankbria/ralph-claude-code)
 
 **Install once, use everywhere** - Ralph becomes a global command available in any directory.
 
 ## Project Status
 
-**Version**: v0.9.1 - Active Development
+**Version**: v0.0.1 - Active Development
 **Core Features**: Working and tested
 **Test Coverage**: 145 tests, 100% pass rate
 
@@ -34,44 +36,24 @@ Ralph is an implementation of the Geoffrey Huntley's technique for Claude Code t
 
 ### Recent Improvements
 
-**v0.9.1 - Modern CLI Commands (Phase 1.1)**
-- JSON output format support with `--output-format json` (default)
-- Session continuity using `--continue` flag for cross-loop context
-- Tool permissions via `--allowed-tools` flag
-- Loop context injection with `build_loop_context()` function
-- Backward-compatible: automatic fallback to text parsing
-- 70 new tests: JSON parsing (20) + CLI modern (23) + CLI parsing (27)
-- CI/CD pipeline with kcov coverage reporting
 
-**v0.9.0 - Circuit Breaker Enhancements**
-- Fixed multi-line error matching in stuck loop detection
-- Eliminated JSON field false positives (e.g., `"is_error": false`)
-- Added two-stage error filtering for accurate detection
-- Comprehensive test suite: 22 new tests for error detection
-- Fixed installation to include lib/ directory components
 
 ### In Progress
-- Expanding test coverage
-- Log rotation functionality
-- Dry-run mode
-- Configuration file support (.ralphrc)
-- Metrics and analytics tracking
-- Desktop notifications
-- Git backup and rollback system
+- Main menu to select CLI 
+- First implementation will be Copilot CLI 
 
-**Timeline to v1.0**: ~4 weeks | [Full roadmap](IMPLEMENTATION_PLAN.md) | **Contributions welcome!**
 
 ## Features
 
-- **Autonomous Development Loop** - Continuously executes Claude Code with your project requirements
+- **Autonomous Development Loop** - Continuously executes your CLI tool with your project requirements
 - **Intelligent Exit Detection** - Automatically stops when project objectives are complete
 - **Rate Limiting** - Built-in API call management with hourly limits and countdown timers
-- **5-Hour API Limit Handling** - Detects Claude's 5-hour usage limit and offers wait/exit options
+- **API Limit Handling** - Detects API usage limits and offers wait/exit options
 - **Live Monitoring** - Real-time dashboard showing loop status, progress, and logs
 - **Task Management** - Structured approach with prioritized task lists and progress tracking
 - **Project Templates** - Quick setup for new projects with best-practice structure
 - **Comprehensive Logging** - Detailed execution logs with timestamps and status tracking
-- **Configurable Timeouts** - Set execution timeout for Claude Code operations (1-120 minutes)
+- **Configurable Timeouts** - Set execution timeout for CLI tool operations (1-120 minutes)
 - **Verbose Progress Mode** - Optional detailed progress updates during execution
 - **Response Analyzer** - AI-powered analysis of Claude Code responses with semantic understanding
 - **Circuit Breaker** - Advanced error detection with two-stage filtering, multi-line error matching, and automatic recovery
@@ -96,8 +78,8 @@ INSTALL ONCE              USE MANY TIMES
 Install Ralph globally on your system:
 
 ```bash
-git clone https://github.com/frankbria/ralph-claude-code.git
-cd ralph-claude-code
+git clone https://github.com/chrys/ralph-cli-code.git
+cd ralph-cli-code
 ./install.sh
 ```
 
@@ -157,7 +139,7 @@ ralph-monitor               # Terminal 2: Live monitor dashboard
 Ralph operates on a simple but powerful cycle:
 
 1. **Read Instructions** - Loads `PROMPT.md` with your project requirements
-2. **Execute Claude Code** - Runs Claude Code with current context and priorities
+2. **Execute CLI Tool** - Runs your chosen CLI tool with current context and priorities
 3. **Track Progress** - Updates task lists and logs execution results
 4. **Evaluate Completion** - Checks for exit conditions and project completion signals
 5. **Repeat** - Continues until project is complete or limits are reached
@@ -338,7 +320,7 @@ my-project/
 ## System Requirements
 
 - **Bash 4.0+** - For script execution
-- **Claude Code CLI** - `npm install -g @anthropic-ai/claude-code`
+- **CLI Tool** - Compatible with any AI-powered CLI tool
 - **tmux** - Terminal multiplexer for integrated monitoring (recommended)
 - **jq** - JSON processing for status tracking
 - **Git** - Version control (projects are initialized as git repos)
@@ -426,11 +408,11 @@ tail -f logs/ralph.log
 ### Common Issues
 
 - **Rate Limits** - Ralph automatically waits and displays countdown
-- **5-Hour API Limit** - Ralph detects and prompts for user action (wait or exit)
+- **API Limit** - Ralph detects and prompts for user action (wait or exit)
 - **Stuck Loops** - Check `@fix_plan.md` for unclear or conflicting tasks
 - **Early Exit** - Review exit thresholds if Ralph stops too soon
 - **Execution Timeouts** - Increase `--timeout` value for complex operations
-- **Missing Dependencies** - Ensure Claude Code CLI and tmux are installed
+- **Missing Dependencies** - Ensure your CLI tool and tmux are installed
 - **tmux Session Lost** - Use `tmux list-sessions` and `tmux attach` to reconnect
 
 ## Contributing
@@ -528,12 +510,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Inspired by the [Ralph technique](https://ghuntley.com/ralph/) created by Geoffrey Huntley
-- Built for [Claude Code](https://claude.ai/code) by Anthropic
+- Forked from [ralph-claude-code](https://github.com/frankbria/ralph-claude-code) by Frank Bria
 - Community feedback and contributions
 
 ## Related Projects
 
-- [Claude Code](https://claude.ai/code) - The AI coding assistant that powers Ralph
+- [ralph-claude-code](https://github.com/frankbria/ralph-claude-code) - Original Ralph implementation for Claude Code
 - [Aider](https://github.com/paul-gauthier/aider) - Original Ralph technique implementation
 
 ---
@@ -639,7 +621,7 @@ See [Contributing](#contributing) section above for guidelines.
 
 ---
 
-**Ready to let AI build your project?** Start with `./install.sh` and let Ralph take it from there!
+**Ready to let your CLI tool build your project?** Start with `./install.sh` and let Ralph take it from there!
 
 ## Star History
 
