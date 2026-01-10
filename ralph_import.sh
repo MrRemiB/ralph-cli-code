@@ -53,11 +53,12 @@ show_help() {
     cat << HELPEOF
 Ralph Import - Convert PRDs to Ralph Format
 
-Usage: $0 <source-file> [project-name]
+Usage: $0 <source-file> [project-name] [project-path]
 
 Arguments:
     source-file     Path to your PRD/specification file (any format)
     project-name    Name for the new Ralph project (optional, defaults to filename)
+    project-path    Path to the actual project directory where code should be written
 
 Examples:
     $0 my-app-prd.md
@@ -115,6 +116,7 @@ check_dependencies() {
 convert_prd() {
     local source_file=$1
     local project_name=$2
+    local project_path=$3
     
     log "INFO" "Converting PRD to Ralph format..."
     log "DEBUG" "Current directory: $(pwd)"
@@ -135,6 +137,10 @@ convert_prd() {
     {
         echo "# Ralph Development Instructions"
         echo ""
+        echo "## Project Location"
+        echo "Working directory: $(pwd)"
+        echo "Actual project path: $project_path"
+        echo ""
         echo "## Context"
         echo "You are Ralph, an autonomous AI development agent working on this project."
         echo ""
@@ -143,14 +149,18 @@ convert_prd() {
         echo ""
         echo "## Key Principles"
         echo "- ONE task per loop - focus on the most important thing"
+        echo "- Do not create separate solution files or staging folders. You MUST work directly in the project structure."
+        echo "- You are not in main branch. Edit the files of the actual project."
         echo "- Search codebase before implementing"
         echo "- Use subagents for expensive operations"
-        echo "- Write tests for new functionality only"
+        echo "- Write unit tests for new functionality"
+        echo "- Write regression tests for new functionality"
         echo "- Update @fix_plan.md with learnings"
         echo "- Commit working changes with clear messages"
+        echo "- Your task is not complete until the live application reflects the changes."
         echo ""
         echo "## Testing Guidelines"
-        echo "- LIMIT testing to ~20% of effort per loop"
+        echo "- After implementing a feature or fixing a bug, run the related unit tests. If the unit tests pass using the project files, the task is done."
         echo "- PRIORITIZE: Implementation > Docs > Tests"
         echo "- Only test NEW code, don't refactor existing tests"
         echo ""
@@ -352,6 +362,7 @@ SPECSEOF
 main() {
     local source_file="$1"
     local project_name="$2"
+    local project_path="$3"
     
     # Validate arguments
     if [[ -z "$source_file" ]]; then
@@ -370,6 +381,27 @@ main() {
         project_name=$(basename "$source_file" | sed 's/\.[^.]*$//')
     fi
     
+    # Get project path from user if not provided
+    if [[ -z "$project_path" ]]; then
+        log "INFO" "Project path is required to tell Ralph where to work."
+        echo -n "Enter the path to your actual project directory: "
+        read project_path
+        
+        if [[ -z "$project_path" ]]; then
+            log "ERROR" "Project path cannot be empty"
+            exit 1
+        fi
+    fi
+    
+    # Validate that project path exists
+    if [[ ! -d "$project_path" ]]; then
+        log "ERROR" "Project path does not exist: $project_path"
+        exit 1
+    fi
+    
+    # Resolve to absolute path
+    project_path=$(cd "$project_path" && pwd)
+    
     log "INFO" "Converting PRD: $source_file"
     log "INFO" "Project name: $project_name"
     
@@ -384,7 +416,7 @@ main() {
     cp "../$source_file" .
     
     # Run conversion
-    convert_prd "$source_file" "$project_name"
+    convert_prd "$source_file" "$project_name" "$project_path"
     
     log "SUCCESS" "🎉 PRD imported successfully!"
     echo ""
