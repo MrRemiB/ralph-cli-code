@@ -622,7 +622,3 @@ See [Contributing](#contributing) section above for guidelines.
 ---
 
 **Ready to let your CLI tool build your project?** Start with `./install.sh` and let Ralph take it from there!
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=frankbria/ralph-claude-code&type=date&legend=top-left)](https://www.star-history.com/#frankbria/ralph-claude-code&type=date&legend=top-left)
