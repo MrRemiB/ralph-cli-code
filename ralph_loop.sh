@@ -18,6 +18,7 @@ DOCS_DIR="docs/generated"
 STATUS_FILE="status.json"
 PROGRESS_FILE="progress.json"
 OPENCODE_CMD="opencode"
+OPENCODE_MODEL="opencode/grok-code"  # Default model for OpenCode
 MAX_CALLS_PER_HOUR=100  # Adjust based on your plan
 VERBOSE_PROGRESS=false  # Default: no verbose progress updates
 CLAUDE_TIMEOUT_MINUTES=10  # Default: 10 minutes timeout for OpenCode execution (optimized for speed)
@@ -762,16 +763,16 @@ update_session_last_used() {
 # Global array for Claude command arguments (avoids shell injection)
 declare -a CLAUDE_CMD_ARGS=()
 
-# Build Claude CLI command with modern flags using array (shell-injection safe)
+# Build OpenCode command with appropriate flags using array (shell-injection safe)
 # Populates global CLAUDE_CMD_ARGS array for direct execution
-# Uses -p flag with prompt content (Claude CLI does not have --prompt-file)
+# Adapted for OpenCode interface instead of Claude CLI
 build_claude_command() {
     local prompt_file=$1
     local loop_context=$2
     local session_id=$3
 
-    # Reset global array
-    CLAUDE_CMD_ARGS=("$OPENCODE_CMD")
+    # Reset global array - use 'run' subcommand for OpenCode
+    CLAUDE_CMD_ARGS=("$OPENCODE_CMD" "run")
 
     # Check if prompt file exists
     if [[ ! -f "$prompt_file" ]]; then
@@ -779,42 +780,39 @@ build_claude_command() {
         return 1
     fi
 
-    # Add output format flag
+    # Add format flag (OpenCode uses --format instead of --output-format)
     if [[ "$CLAUDE_OUTPUT_FORMAT" == "json" ]]; then
-        CLAUDE_CMD_ARGS+=("--output-format" "json")
+        CLAUDE_CMD_ARGS+=("--format" "json")
     fi
 
-    # Add allowed tools (each tool as separate array element)
-    if [[ -n "$CLAUDE_ALLOWED_TOOLS" ]]; then
-        CLAUDE_CMD_ARGS+=("--allowedTools")
-        # Split by comma and add each tool
-        local IFS=','
-        read -ra tools_array <<< "$CLAUDE_ALLOWED_TOOLS"
-        for tool in "${tools_array[@]}"; do
-            # Trim whitespace
-            tool=$(echo "$tool" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            if [[ -n "$tool" ]]; then
-                CLAUDE_CMD_ARGS+=("$tool")
-            fi
-        done
-    fi
+    # Note: OpenCode doesn't have --allowed-tools equivalent
+    # Tools are managed differently in OpenCode ecosystem
 
     # Add session continuity flag
     if [[ "$CLAUDE_USE_CONTINUE" == "true" ]]; then
         CLAUDE_CMD_ARGS+=("--continue")
     fi
 
-    # Add loop context as system prompt (no escaping needed - array handles it)
-    if [[ -n "$loop_context" ]]; then
-        CLAUDE_CMD_ARGS+=("--append-system-prompt" "$loop_context")
+    # Add session ID if provided
+    if [[ -n "$session_id" ]]; then
+        CLAUDE_CMD_ARGS+=("--session" "$session_id")
     fi
 
-    # Read prompt file content and use -p flag
-    # Note: Claude CLI uses -p for prompts, not --prompt-file (which doesn't exist)
-    # Array-based approach maintains shell injection safety
+    # Add model if specified (default to grok-code for OpenCode)
+    local model=${OPENCODE_MODEL:-"opencode/grok-code"}
+    CLAUDE_CMD_ARGS+=("--model" "$model")
+
+    # For OpenCode, combine loop context with prompt content
+    # OpenCode uses positional arguments for the message
     local prompt_content
-    prompt_content=$(cat "$prompt_file")
-    CLAUDE_CMD_ARGS+=("-p" "$prompt_content")
+    if [[ -n "$loop_context" ]]; then
+        prompt_content="$loop_context"$'\n\n'"$(cat "$prompt_file")"
+    else
+        prompt_content=$(cat "$prompt_file")
+    fi
+
+    # Add the prompt as positional argument
+    CLAUDE_CMD_ARGS+=("$prompt_content")
 }
 
 # Main execution function
