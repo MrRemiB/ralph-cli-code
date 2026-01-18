@@ -762,6 +762,8 @@ update_session_last_used() {
 
 # Global array for Claude command arguments (avoids shell injection)
 declare -a CLAUDE_CMD_ARGS=()
+# Global variable for temporary prompt file
+CLAUDE_TEMP_PROMPT=""
 
 # Build OpenCode command with appropriate flags using array (shell-injection safe)
 # Populates global CLAUDE_CMD_ARGS array for direct execution
@@ -802,17 +804,17 @@ build_claude_command() {
     local model=${OPENCODE_MODEL:-"opencode/grok-code"}
     CLAUDE_CMD_ARGS+=("--model" "$model")
 
-    # For OpenCode, combine loop context with prompt content
-    # OpenCode uses positional arguments for the message
-    local prompt_content
+    # For OpenCode, create a temporary file with the combined content
+    # OpenCode can read from stdin or we can use --command with a file
+    local temp_prompt_file=$(mktemp)
     if [[ -n "$loop_context" ]]; then
-        prompt_content="$loop_context"$'\n\n'"$(cat "$prompt_file")"
+        echo "$loop_context"$'\n\n'"$(cat "$prompt_file")" > "$temp_prompt_file"
     else
-        prompt_content=$(cat "$prompt_file")
+        cp "$prompt_file" "$temp_prompt_file"
     fi
 
-    # Add the prompt as positional argument
-    CLAUDE_CMD_ARGS+=("$prompt_content")
+    # Store temp file path for cleanup and use stdin redirection
+    CLAUDE_TEMP_PROMPT="$temp_prompt_file"
 }
 
 # Main execution function
@@ -861,9 +863,9 @@ execute_claude_code() {
 
     # Execute OpenCode
     if [[ "$use_modern_cli" == "true" ]]; then
-        # Modern execution with command array (shell-injection safe)
-        # Execute array directly without bash -c to prevent shell metacharacter interpretation
-        if timeout ${timeout_seconds}s "${CLAUDE_CMD_ARGS[@]}" > "$output_file" 2>&1 &
+        # Modern execution with stdin redirection for large prompts
+        # Use the command array with stdin redirection from temp file
+        if timeout ${timeout_seconds}s "${CLAUDE_CMD_ARGS[@]}" < "$CLAUDE_TEMP_PROMPT" > "$output_file" 2>&1 &
         then
             :  # Continue to wait loop
         else
@@ -1015,6 +1017,12 @@ EOF
             return 3  # Special code for circuit breaker trip
         fi
 
+        # Clean up temporary prompt file
+        if [[ -n "$CLAUDE_TEMP_PROMPT" && -f "$CLAUDE_TEMP_PROMPT" ]]; then
+            rm -f "$CLAUDE_TEMP_PROMPT"
+            CLAUDE_TEMP_PROMPT=""
+        fi
+
         return 0
     else
         # Clear progress file on failure
@@ -1034,6 +1042,11 @@ EOF
 # Cleanup function
 cleanup() {
     log_status "INFO" "Ralph loop interrupted. Cleaning up..."
+    # Clean up temporary prompt file if it exists
+    if [[ -n "$CLAUDE_TEMP_PROMPT" && -f "$CLAUDE_TEMP_PROMPT" ]]; then
+        rm -f "$CLAUDE_TEMP_PROMPT"
+        log_status "INFO" "Cleaned up temporary prompt file"
+    fi
     reset_session "manual_interrupt"
     update_status "$loop_count" "$(cat "$CALL_COUNT_FILE" 2>/dev/null || echo "0")" "interrupted" "stopped"
     exit 0
