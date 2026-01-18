@@ -790,15 +790,9 @@ build_claude_command() {
     # Note: OpenCode doesn't have --allowed-tools equivalent
     # Tools are managed differently in OpenCode ecosystem
 
-    # Add session continuity flag only if we have a valid session
-    if [[ "$CLAUDE_USE_CONTINUE" == "true" && -n "$session_id" ]]; then
-        CLAUDE_CMD_ARGS+=("--continue")
-    fi
-
-    # Add session ID if provided (for explicit session continuation)
-    if [[ -n "$session_id" ]]; then
-        CLAUDE_CMD_ARGS+=("--session" "$session_id")
-    fi
+    # For OpenCode, let it manage sessions automatically
+    # Don't force session continuity to avoid command parsing issues
+    # OpenCode will create/manage sessions as needed
 
     # Add model if specified (default to grok-code for OpenCode)
     local model=${OPENCODE_MODEL:-"opencode/grok-code"}
@@ -838,20 +832,12 @@ execute_claude_code() {
         fi
     fi
 
-    # Initialize or resume session
-    local session_id=""
-    if [[ "$CLAUDE_USE_CONTINUE" == "true" ]]; then
-        session_id=$(init_claude_session)
-    fi
-
-    # Build the Claude CLI command with modern flags
-    # Note: We use the modern CLI with -p flag when CLAUDE_OUTPUT_FORMAT is "json"
-    # For backward compatibility, fall back to stdin piping for text mode
+    # Build the OpenCode command
     local use_modern_cli=false
 
     if [[ "$CLAUDE_OUTPUT_FORMAT" == "json" ]]; then
         # OpenCode approach: use CLI flags (builds CLAUDE_CMD_ARGS array)
-        if build_claude_command "$PROMPT_FILE" "$loop_context" "$session_id"; then
+        if build_claude_command "$PROMPT_FILE" "$loop_context" ""; then
             use_modern_cli=true
             log_status "INFO" "Using OpenCode CLI mode (JSON output)"
             log_status "DEBUG" "Command: ${CLAUDE_CMD_ARGS[*]}"
@@ -949,11 +935,6 @@ EOF
         echo '{"status": "completed", "timestamp": "'$(date '+%Y-%m-%d %H:%M:%S')'"}' > "$PROGRESS_FILE"
 
         log_status "SUCCESS" "✅ OpenCode execution completed successfully"
-
-        # Save session ID from JSON output (Phase 1.1)
-        if [[ "$CLAUDE_USE_CONTINUE" == "true" ]]; then
-            save_claude_session "$output_file"
-        fi
 
         # Analyze the response
         log_status "INFO" "🔍 Analyzing OpenCode response..."
