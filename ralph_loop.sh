@@ -443,12 +443,12 @@ main() {
             update_status "$loop_count" "$(cat "$CALL_COUNT_FILE" 2>/dev/null || echo "0")" "success" "running"
             
             # Brief pause between loops
-            sleep 3
+            timeout 10 sleep 3 2>/dev/null || true
         else
             update_status "$loop_count" "$(cat "$CALL_COUNT_FILE" 2>/dev/null || echo "0")" "failed" "running"
             
             # Wait longer on failure
-            sleep 10
+            timeout 30 sleep 10 2>/dev/null || true
         fi
     done
     
