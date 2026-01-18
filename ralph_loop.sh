@@ -850,12 +850,19 @@ execute_claude_code() {
     local use_modern_cli=false
 
     if [[ "$CLAUDE_OUTPUT_FORMAT" == "json" ]]; then
-        # Modern approach: use CLI flags (builds CLAUDE_CMD_ARGS array)
+        # OpenCode approach: use CLI flags (builds CLAUDE_CMD_ARGS array)
         if build_claude_command "$PROMPT_FILE" "$loop_context" "$session_id"; then
             use_modern_cli=true
-            log_status "INFO" "Using modern CLI mode (JSON output)"
+            log_status "INFO" "Using OpenCode CLI mode (JSON output)"
+            log_status "DEBUG" "Command: ${CLAUDE_CMD_ARGS[*]}"
+            log_status "DEBUG" "Temp file: $CLAUDE_TEMP_PROMPT"
+            if [[ -f "$CLAUDE_TEMP_PROMPT" ]]; then
+                log_status "DEBUG" "Temp file exists, size: $(wc -c < "$CLAUDE_TEMP_PROMPT") bytes"
+            else
+                log_status "ERROR" "Temp file does not exist!"
+            fi
         else
-            log_status "WARN" "Failed to build modern CLI command, falling back to legacy mode"
+            log_status "WARN" "Failed to build OpenCode command, falling back to legacy mode"
         fi
     else
         log_status "INFO" "Using legacy CLI mode (text output)"
