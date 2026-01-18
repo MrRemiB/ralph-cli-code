@@ -790,12 +790,12 @@ build_claude_command() {
     # Note: OpenCode doesn't have --allowed-tools equivalent
     # Tools are managed differently in OpenCode ecosystem
 
-    # Add session continuity flag
-    if [[ "$CLAUDE_USE_CONTINUE" == "true" ]]; then
+    # Add session continuity flag only if we have a valid session
+    if [[ "$CLAUDE_USE_CONTINUE" == "true" && -n "$session_id" ]]; then
         CLAUDE_CMD_ARGS+=("--continue")
     fi
 
-    # Add session ID if provided
+    # Add session ID if provided (for explicit session continuation)
     if [[ -n "$session_id" ]]; then
         CLAUDE_CMD_ARGS+=("--session" "$session_id")
     fi
