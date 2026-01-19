@@ -95,7 +95,7 @@ check_tmux_available() {
 
 # Setup tmux session with monitor
 setup_tmux_session() {
-    local session_name="ralph-dev-$(date +%s)"
+    local session_name="ralph-$(date +%s)"
     local ralph_home="${RALPH_HOME:-$HOME/.ralph}"
     
     log_status "INFO" "Setting up tmux session: $session_name"
@@ -799,6 +799,7 @@ build_claude_command() {
     CLAUDE_CMD_ARGS+=("--model" "$model")
 
     # For OpenCode, create a temporary file with the combined content
+    # OpenCode can read from stdin or we can use --command with a file
     local temp_prompt_file=$(mktemp)
     if [[ -n "$loop_context" ]]; then
         echo "$loop_context"$'\n\n'"$(cat "$prompt_file")" > "$temp_prompt_file"
@@ -806,17 +807,14 @@ build_claude_command() {
         cp "$prompt_file" "$temp_prompt_file"
     fi
 
-    # Add the temp file as a positional argument (OpenCode accepts file input this way)
-    CLAUDE_CMD_ARGS+=("$temp_prompt_file")
-
-    # Store temp file path for cleanup
+    # Store temp file path for cleanup and use stdin redirection
     CLAUDE_TEMP_PROMPT="$temp_prompt_file"
 }
 
 # Main execution function
 execute_claude_code() {
     local timestamp=$(date '+%Y-%m-%d_%H-%M-%S')
-    local output_file="$LOG_DIR/opencode_output_${timestamp}.log"
+    local output_file="$LOG_DIR/claude_output_${timestamp}.log"
     local loop_count=$1
     local calls_made=$(cat "$CALL_COUNT_FILE" 2>/dev/null || echo "0")
     calls_made=$((calls_made + 1))
@@ -853,9 +851,15 @@ execute_claude_code() {
     if [[ "$use_modern_cli" == "true" ]]; then
         # Modern execution with stdin redirection for large prompts
         # Use the command array with stdin redirection from temp file
-        log_status "DEBUG" "About to execute: timeout ${timeout_seconds}s ${CLAUDE_CMD_ARGS[*]}"
-        log_status "DEBUG" "Temp file exists: $([[ -f "$CLAUDE_TEMP_PROMPT" ]] && echo "YES, size: $(wc -c < "$CLAUDE_TEMP_PROMPT") bytes" || echo "NO")"
-        if timeout ${timeout_seconds}s "${CLAUDE_CMD_ARGS[@]}" > "$output_file" 2>&1 &
+        if timeout ${timeout_seconds}s "${CLAUDE_CMD_ARGS[@]}" < "$CLAUDE_TEMP_PROMPT" > "$output_file" 2>&1 &
+        then
+            :  # Continue to wait loop
+        else
+            log_status "ERROR" "❌ Failed to start OpenCode process (modern mode)"
+            # Fall back to legacy mode
+            log_status "INFO" "Falling back to legacy mode..."
+            use_modern_cli=false
+        fi
     fi
 
     # Fall back to legacy stdin piping if modern mode failed or not enabled
