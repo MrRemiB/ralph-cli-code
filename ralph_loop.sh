@@ -851,14 +851,15 @@ execute_claude_code() {
     if [[ "$use_modern_cli" == "true" ]]; then
         # Modern execution with stdin redirection for large prompts
         # Use the command array with stdin redirection from temp file
-        if timeout ${timeout_seconds}s "${CLAUDE_CMD_ARGS[@]}" < "$CLAUDE_TEMP_PROMPT" > "$output_file" 2>&1 &
-        then
-            :  # Continue to wait loop
+
+        # Execute in foreground to avoid stdin redirection issues with background processes
+        timeout ${timeout_seconds}s "${CLAUDE_CMD_ARGS[@]}" < "$CLAUDE_TEMP_PROMPT" > "$output_file" 2>&1
+        local exit_code=$?
+        if [[ $exit_code -eq 0 ]]; then
+            log_status "SUCCESS" "✅ OpenCode execution completed successfully"
         else
-            log_status "ERROR" "❌ Failed to start OpenCode process (modern mode)"
-            # Fall back to legacy mode
-            log_status "INFO" "Falling back to legacy mode..."
-            use_modern_cli=false
+            log_status "ERROR" "❌ OpenCode execution failed with exit code $exit_code"
+            return 1
         fi
     fi
 
@@ -873,53 +874,7 @@ execute_claude_code() {
         fi
     fi
 
-    # Get PID and monitor progress
-    local claude_pid=$!
-    local progress_counter=0
-
-    # Show progress while OpenCode is running
-    while kill -0 $claude_pid 2>/dev/null; do
-        progress_counter=$((progress_counter + 1))
-        case $((progress_counter % 4)) in
-            1) progress_indicator="⠋" ;;
-            2) progress_indicator="⠙" ;;
-            3) progress_indicator="⠹" ;;
-            0) progress_indicator="⠸" ;;
-        esac
-
-        # Get last line from output if available
-        local last_line=""
-        if [[ -f "$output_file" && -s "$output_file" ]]; then
-            last_line=$(tail -1 "$output_file" 2>/dev/null | head -c 80)
-        fi
-
-        # Update progress file for monitor
-        cat > "$PROGRESS_FILE" << EOF
-{
-    "status": "executing",
-    "indicator": "$progress_indicator",
-    "elapsed_seconds": $((progress_counter * 10)),
-    "last_output": "$last_line",
-    "timestamp": "$(date '+%Y-%m-%d %H:%M:%S')"
-}
-EOF
-
-        # Only log if verbose mode is enabled
-        if [[ "$VERBOSE_PROGRESS" == "true" ]]; then
-            if [[ -n "$last_line" ]]; then
-                log_status "INFO" "$progress_indicator OpenCode: $last_line... (${progress_counter}0s)"
-            else
-                log_status "INFO" "$progress_indicator OpenCode working... (${progress_counter}0s elapsed)"
-            fi
-        fi
-
-        sleep 15
-    done
-
-    # Wait for the process to finish and get exit code
-    wait $claude_pid
-    local exit_code=$?
-
+    # Execution completed, check results
     if [ $exit_code -eq 0 ]; then
         # Only increment counter on successful execution
         echo "$calls_made" > "$CALL_COUNT_FILE"
